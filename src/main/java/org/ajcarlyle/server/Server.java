@@ -1,14 +1,19 @@
 package org.ajcarlyle.server;
 
+import org.ajcarlyle.server.QueuePublisher;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.IOException;
 import java.util.concurrent.TimeoutException;
 
 import javax.xml.ws.Endpoint;
-import javax.xml.ws.WebServiceFeature;
 
 import org.apache.hello_world_soap_http.Greeter;
 
 public class Server {
+
+    private static final Logger logger = LoggerFactory.getLogger(Server.class);
 
     private QueuePublisher queue;
 
@@ -21,9 +26,11 @@ public class Server {
     }
 
     public void start() throws Exception {
-        System.out.println("Starting Server");
+        logger.info("Starting Server");
         Greeter implementor = new GreeterImpl(this);
-        Endpoint.publish("http://localhost:9000/SoapContext/SoapPort", implementor);
+        Endpoint endpoint = Endpoint.publish("http://localhost:9000/SoapContext/SoapPort", implementor);
+
+        logger.info("Endpoint: {}",endpoint.toString());
     }
 
     public static void main(String[] args) throws Exception {

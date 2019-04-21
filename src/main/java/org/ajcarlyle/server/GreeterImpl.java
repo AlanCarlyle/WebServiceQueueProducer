@@ -1,9 +1,7 @@
 package org.ajcarlyle.server;
 
-import java.io.IOException;
-
 import org.apache.hello_world_soap_http.Greeter;
-import org.apache.hello_world_soap_http.PingMeFault;
+
 
 @javax.jws.WebService(portName = "SoapPort", serviceName = "SOAPService", targetNamespace = "http://apache.org/hello_world_soap_http", endpointInterface = "org.apache.hello_world_soap_http.Greeter")
 

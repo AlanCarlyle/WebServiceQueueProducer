@@ -50,11 +50,7 @@
     <wsdl:message name="greetMeResponse">
         <wsdl:part element="x1:greetMeResponse" name="out"/>
     </wsdl:message>
-    <wsdl:message name="greetMeOneWayRequest">
-        <wsdl:part element="x1:greetMeOneWay" name="in"/>
-    </wsdl:message>
-  
-     
+        
     <wsdl:portType name="Greeter">
       
         <wsdl:operation name="greetMe">

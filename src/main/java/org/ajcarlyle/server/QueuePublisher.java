@@ -2,24 +2,33 @@ package org.ajcarlyle.server;
 
 import com.rabbitmq.client.*;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.IOException;
-import java.util.concurrent.Executor;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeoutException;
+import java.util.Random;
+import java.util.concurrent.ExecutorService;
 
 public class QueuePublisher {
 
+    private final static Logger logger = LoggerFactory.getLogger(QueuePublisher.class);
+    
     private final static String QUEUE_NAME = "products_queue";
 
     private ConnectionFactory factory;
     private Connection connection;
     private Channel channel;
-    
 
+    private static ExecutorService executor;
+    static {
+        int cores = Runtime.getRuntime().availableProcessors();
+        executor = Executors.newWorkStealingPool(cores);
+    }
 
     public  QueuePublisher() throws IOException, TimeoutException {
-        
+
         factory = new ConnectionFactory();
         factory.setHost("localhost");
         connection = factory.newConnection();
@@ -31,10 +40,7 @@ public class QueuePublisher {
 
    public void SendMessage(String message) throws IOException {
 
-   
-
     channel.basicPublish("", QUEUE_NAME, null, message.getBytes());
-    
     System.out.println( String.format(" [x] Sent '\"%s\"'",message));
    }
    public void Close() throws IOException, TimeoutException {
@@ -44,33 +50,24 @@ public class QueuePublisher {
 
 
    public void SendMessageAsync(String message) {
-     new Thread(new QueueMessageRunnable(this, message)).start();
-   }
 
-   public static class QueueMessageRunnable implements Runnable {
+    Runnable runnable = () -> {
+        try {
 
-    private QueuePublisher publisher;
-        private String message;
-        public QueueMessageRunnable(QueuePublisher publisher, String message)
-        {
-            this.publisher = publisher;
-            this.message = message;
+            Random random = new Random();
+            int wait = 5000 + (1000 *  random.nextInt(10)); 
+            logger.info("Waiting {} Seconds before queueing message",wait/1000);
+            // Sleep for between 5 to 35 Seconds before sending message to queue.
+            Thread.sleep(wait);
+            
+            channel.basicPublish("", QUEUE_NAME, null, message.getBytes());
+            logger.info( String.format(" [x] Queued '\"%s\"'",message));
+        } catch (IOException e) {
+            e.printStackTrace();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
         }
-        public void run() {
-            try {
-                Thread.sleep(5000);
-                
-                publisher.channel.basicPublish("", QUEUE_NAME, null, message.getBytes());
-              //  System.out.println( String.format(" [x] Sent '\"%s\"'",message));
-            } catch (IOException e) {
-                // TODO Auto-generated catch block
-                e.printStackTrace();
-            } catch (InterruptedException e) {
-                // TODO Auto-generated catch block
-                e.printStackTrace();
-            }
-        }
-       
+    };
+    executor.submit(runnable);
    }
-
 }
