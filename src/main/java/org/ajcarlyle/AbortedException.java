@@ -1,8 +1,7 @@
-package org.ajcarlyle.client;
+package org.ajcarlyle;
 
-import java.io.IOException;
 
-public class AbortedException extends IOException {
+public class AbortedException extends RuntimeException {
 
   private static final long serialVersionUID = -2391068728995041250L;
 

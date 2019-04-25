@@ -60,7 +60,7 @@
               <sourceRoot>${project.build.directory}/generated-sources/cxf</sourceRoot>
               <wsdlOptions>
                 <wsdlOption>
-                  <wsdl>${basedir}/src/main/resources/LessonOne.wsdl</wsdl>
+                  <wsdl>${basedir}/src/main/resources/JobService.wsdl</wsdl>
                 </wsdlOption>
               </wsdlOptions>
             </configuration>

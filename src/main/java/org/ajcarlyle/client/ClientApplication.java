@@ -1,6 +1,6 @@
 package org.ajcarlyle.client;
 
-public class Main {
+public class ClientApplication {
 
 
   public static void main(String args[]) throws Exception {
@@ -12,3 +12,5 @@ public class Main {
     System.exit(0);
   }
 }
+
+
