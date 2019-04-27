@@ -23,11 +23,10 @@ public class SeverApplication {
     try {
       server = new Server();
       logger.info("Server Started");
-
     
       server.start();
 
-      startUpTest();
+  //   startUpTest();
       logger.info("Server ready...");
 
       for (;;) {
@@ -40,18 +39,16 @@ public class SeverApplication {
     }
   }
 
-  private static void startUpTest() {
+  // private static void startUpTest() {
 
-    JobServiceImpl jobService = new JobServiceImpl(server);
-    JobRequest testRequest = new JobRequest();
-    testRequest.setClientId("0000");
-    testRequest.setContent("Direct Request Test");
-    JobResponse response = jobService.executeJob(testRequest);
+  //   JobServiceImpl jobService = new JobServiceImpl(server);
+  //   JobRequest testRequest = new JobRequest();
+  //   testRequest.setClientId("0000");
+  //   testRequest.setContent("Direct Request Test");
+  //   JobResponse response = jobService.executeJob(testRequest);
 
-     if( response.getClientId() != "0000")
-        throw new RuntimeException("Something is wrong");
-
-  
-  }
+  //    if( response.getClientId() != "0000")
+  //       throw new RuntimeException("Something is wrong");
+  // }
 
 }

@@ -26,18 +26,11 @@
             </sequence>
         </complexType>
     </element>
-    <!-- <element name="jobRequest" type="tns:jobRequestType"/>
-    <element name="jobResponse" type="tns:jobResponseType"/> -->
-
-    <!-- 
+ 
     
-    <simpleType name="MyStringType">
-        <restriction base="string">
-            <maxLength value="30" />
-        </restriction>
-    </simpleType>
-
     
+
+    <!--
     <element name="faultDetail">
                 <complexType>
                     <sequence>

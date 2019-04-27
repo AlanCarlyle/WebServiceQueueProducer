@@ -9,8 +9,8 @@ public class ClientApplication {
 
     client.SendMessages();
 
+    Thread.sleep(1000 * 60 * 5);
+
     System.exit(0);
   }
 }
-
-

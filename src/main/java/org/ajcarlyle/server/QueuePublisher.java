@@ -51,22 +51,41 @@ public class QueuePublisher {
 
 
    public void SendMessageAsync(String message) {
-
-    Runnable runnable = () -> {
-        try {
-
-            Random random = new Random();
-            int wait = (1000 *  random.nextInt(5)); 
-            logger.info("Waiting {} Seconds before queueing message '{}'",wait/1000,message);
-            // Sleep for between 1 to 5 Seconds before sending message to queue.
-            Thread.sleep(wait);
-            
-            channel.basicPublish("", QUEUE_NAME, null, message.getBytes());
-            logger.info(" [x] Queued {}",message);
-        } catch (IOException | InterruptedException e) {
-            logger.error("Error consuming message", e);
-        }
-    };
-    executor.submit(runnable);
+    
+    new JobProcessor(channel,message).run();
    }
+
+
+   public static class JobProcessor implements Runnable {
+
+    private final static Random random = new Random();
+    private String message;
+
+    private Channel channel;
+    public JobProcessor(Channel channel, String message){
+        this.message = message;
+        this.channel = channel;
+    }
+
+        @Override
+        public void run() {
+            try {
+                logger.info(" [x] Queing Message '{}''",message);
+                byte[] body = message.getBytes();
+              
+               int wait = (1000 + 1000 * random.nextInt(2)); 
+           //     logger.info("Waiting {} Seconds before queueing message '{}'",wait/1000,message);
+                // Sleep for between 1 to 5 Seconds before sending message to queue.
+                Thread.sleep(wait);
+                
+                channel.basicPublish("", QUEUE_NAME, null, body );
+                
+            } catch (IOException | InterruptedException e) {
+                logger.error("Error consuming message", e);
+            }
+        }
+    
+
+
+   } 
 }
