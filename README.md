@@ -8,15 +8,15 @@ This is primarily an exploration of a moderatly complex threading scenario for t
 
 The general scenario is;
 
-Each web service requests are sent using individual async task
-There is a singleton Rabbit MQ consumer that receives all results
+Each web service requests are sent using individual async task 
+There is a singleton Rabbit MQ consumer that receives all results 
 
-Given many request to be sent to  web service
-And immediate reply from web service with job identifier
-And long wait for job processing result to be placed on message queue
-When we send 20 requests we process only 4 at same time until we received ably
-Then if any request fails at any stage we abort sending any further requests
-And if we take to long to get a result on the queue for a give request we abort sending any further requests
+Given many request to be sent to  web service   
+And immediate reply from web service with job identifier   
+And long wait for job processing result to be placed on message queue   
+When we send 20 requests we process only 4 at same time waiting until have revived result before starting next one 
+Then if any request fails at any stage we abort sending any further requests 
+And if we take to long to get a result on the queue for a give request we abort sending any further requests 
 
 
 
