@@ -1,0 +1,49 @@
+<schema targetNamespace="http://ajcarlyle.org/jobservice/types" xmlns="http://www.w3.org/2001/XMLSchema" xmlns:tns="http://ajcarlyle.org/jobservice/types" elementFormDefault="qualified">
+    
+    
+    <element name="jobQueueMessage">
+    <complexType >
+        <sequence>
+            <element name="serverId" type="string" />
+            <element name="clientId" type="string" />
+            <element name="status" type="string" />
+        </sequence>
+    </complexType>
+    </element>
+    <element name="jobRequest">
+        <complexType>
+            <sequence>
+                <element name="clientId" type="string" />
+                <element name="content" type="string" />
+            </sequence>
+        </complexType>
+    </element>
+    <element name="jobResponse">
+        <complexType>
+            <sequence>
+                <element name="clientId" type="string" />
+                <element name="serverId" type="string" />
+            </sequence>
+        </complexType>
+    </element>
+    <!-- <element name="jobRequest" type="tns:jobRequestType"/>
+    <element name="jobResponse" type="tns:jobResponseType"/> -->
+
+    <!-- 
+    
+    <simpleType name="MyStringType">
+        <restriction base="string">
+            <maxLength value="30" />
+        </restriction>
+    </simpleType>
+
+    
+    <element name="faultDetail">
+                <complexType>
+                    <sequence>
+                        <element name="minor" type="short"/>
+                        <element name="major" type="short"/>
+                    </sequence>
+                </complexType>
+            </element> -->
+</schema>
