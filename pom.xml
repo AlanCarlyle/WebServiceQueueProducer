@@ -4,7 +4,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>ajcarlyle.org</groupId>
   <artifactId>web-service-queue-producer</artifactId>
-  <version>0.0.2-SNAPSHOT</version>
+  <version>0.0.3-SNAPSHOT</version>
   <name>WebServiceQueueProducer</name>
   <packaging>jar</packaging>
 
