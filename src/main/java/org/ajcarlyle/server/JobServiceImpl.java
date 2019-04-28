@@ -1,6 +1,7 @@
 package org.ajcarlyle.server;
 
 import java.io.StringWriter;
+import java.util.Random;
 import java.util.UUID;
 
 import javax.xml.bind.JAXBContext;
@@ -16,8 +17,7 @@ import org.ajcarlyle.jobservice.types.JobResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-@javax.jws.WebService(portName = "SoapPort", serviceName = "SOAPService", targetNamespace = "http://ajcarlyle.org/jobservice", 
-endpointInterface = "org.ajcarlyle.jobservice.JobService")
+@javax.jws.WebService(portName = "SoapPort", serviceName = "SOAPService", targetNamespace = "http://ajcarlyle.org/jobservice", endpointInterface = "org.ajcarlyle.jobservice.JobService")
 
 public class JobServiceImpl implements JobService {
 
@@ -26,7 +26,6 @@ public class JobServiceImpl implements JobService {
   private static Marshaller jaxbMarshaller;
 
   private Server server;
-
 
   static {
     try {
@@ -37,7 +36,6 @@ public class JobServiceImpl implements JobService {
       System.exit(1);
     }
   }
-
 
   public JobServiceImpl(Server server) {
     this.server = server;
@@ -61,16 +59,22 @@ public class JobServiceImpl implements JobService {
     return response;
   }
 
-  
+  private final static Random random = new Random();
+
   private void queueMessage(String serverId, String clientId) throws JAXBException {
 
     JobQueueMessage queueMessage = new JobQueueMessage();
     queueMessage.setClientId(clientId);
     queueMessage.setServerId(serverId);
-    queueMessage.setStatus("Success");
 
+    int failStatus = random.nextInt(6);
+    if (failStatus == 3) {
+      queueMessage.setStatus("Failed");
+    } else {
+      queueMessage.setStatus("Success");
+    }
     StringWriter writer = new StringWriter();
-    
+
     jaxbMarshaller.marshal(queueMessage, writer);
     String content = writer.toString();
 
@@ -79,7 +83,7 @@ public class JobServiceImpl implements JobService {
   }
 
   private void queueFailure(String serverId, String clientId, String error) {
-    server.getQueuePublisher().SendMessageAsync(String.format("ERROR (%s-%s): %s", clientId, serverId,error));
+    server.getQueuePublisher().SendMessageAsync(String.format("ERROR (%s-%s): %s", clientId, serverId, error));
   }
 
 }
