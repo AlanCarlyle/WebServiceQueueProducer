@@ -6,9 +6,13 @@ import java.io.InvalidObjectException;
 import java.io.StringReader;
 import java.io.UnsupportedEncodingException;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.ReentrantLock;
 
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
@@ -24,6 +28,7 @@ import com.rabbitmq.client.Envelope;
 
 import org.ajcarlyle.AbortedException;
 import org.ajcarlyle.jobservice.types.JobQueueMessage;
+import org.ajcarlyle.jobservice.types.JobResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -40,13 +45,13 @@ public class Receiver {
 
     static {
         try {
-          jaxbContext = JAXBContext.newInstance(JobQueueMessage.class);
-          jaxbUnmarshaller = jaxbContext.createUnmarshaller();
+            jaxbContext = JAXBContext.newInstance(JobQueueMessage.class);
+            jaxbUnmarshaller = jaxbContext.createUnmarshaller();
         } catch (JAXBException e) {
-          logger.error("Failed to initialise", e);
-          System.exit(1);
+            logger.error("Failed to initialise", e);
+            System.exit(1);
         }
-      }
+    }
 
     public Receiver() throws IOException, TimeoutException {
         factory = new ConnectionFactory();
@@ -75,79 +80,112 @@ public class Receiver {
             super(channel, maxJobsAllowed);
         }
 
-        public int jobsWaiting() {
-            return getJobQueue().size();
+        public long jobsWaiting() {
+            return getJobMap().mappingCount();
+        }
+
+        public ReentrantLock getLock() {
+            return lock;
         }
     }
 
     static abstract class AbortableBlockingConsumer extends DefaultConsumer {
 
-        private BlockingQueue<String> jobQueue;
-
-        private  boolean isAborted;
+        // private BlockingQueue<String> jobQueue;
+        private ConcurrentHashMap<String, Condition> wsJobMap;
+        private boolean isAborted;
+        protected ReentrantLock lock;
 
         public AbortableBlockingConsumer(Channel channel, int maxJobsAllowed) {
             super(channel);
-            logger.info("CREATE JOB CONSUMER");
             isAborted = false;
-            jobQueue = new LinkedBlockingDeque<String>(maxJobsAllowed);
+            wsJobMap = new ConcurrentHashMap<String, Condition>();
+            lock = new ReentrantLock(true);
         }
 
-        public BlockingQueue<String> getJobQueue() {
-            return jobQueue;
+        public ConcurrentHashMap<String, Condition> getJobMap() {
+            return wsJobMap;
         }
 
         public synchronized boolean isAborted() {
             return isAborted;
         }
-        public synchronized void Abort() {
-            if (!isAborted)
-              isAborted = true;          
-        }
 
-        public synchronized void QueueJobWithTimeOut(String clientId, int timeout, TimeUnit timeUnit) throws AbortedException {
+        public synchronized void Abort() {
+            lock.lock();
+            logger.info("Aborting Remaining");
             try {
-                if (!jobQueue.offer(clientId, timeout, timeUnit)) {
-                    Abort();
-                    throw new AbortedException("Timeout adding job");
-                }
-            } catch (InterruptedException e) {
-                Abort();         
-                throw new AbortedException("Interrupted while adding job", e);
+
+                isAborted = true;
+                wsJobMap.forEach((s, a) -> {
+
+                    a.signalAll();
+                });
+            } finally {
+                lock.unlock();
             }
         }
-        
+
+        public Condition QueueJob(String serverId) {
+
+            lock.lock();
+            try {
+                Condition condition = lock.newCondition();
+                wsJobMap.put(serverId, condition);
+
+                return condition;
+            } finally {
+                lock.unlock();
+            }
+        }
+
         @Override
-        public  void handleDelivery(String consumerTag, Envelope envelope, AMQP.BasicProperties properties,
-                byte[] body)  {
+        public void handleDelivery(String consumerTag, Envelope envelope, AMQP.BasicProperties properties,
+                byte[] body) {
             try {
                 String message = new String(body, "UTF-8");
 
                 StringReader reader = new StringReader(message);
 
-               
                 Object maybeJobQueueMessage = jaxbUnmarshaller.unmarshal(reader);
-                JobQueueMessage jobQueueMessage = 
-                 (maybeJobQueueMessage instanceof JobQueueMessage) ?        
-                    (JobQueueMessage)maybeJobQueueMessage
-                    : null;
-                 
-                    if (jobQueueMessage == null)
-                        throw new InvalidObjectException("Queue message is not valid type");
-                
-                  String serverId = jobQueueMessage.getServerId();
+                JobQueueMessage jobQueueMessage = (maybeJobQueueMessage instanceof JobQueueMessage)
+                        ? (JobQueueMessage) maybeJobQueueMessage
+                        : null;
 
-                if (jobQueue.contains(serverId)) {
-                    jobQueue.remove(serverId);
+                if (jobQueueMessage == null)
+                    throw new InvalidObjectException("Queue message is not valid type");
+
+                String clientId = jobQueueMessage.getClientId();
+                String serverId = jobQueueMessage.getServerId();
+                String status = jobQueueMessage.getStatus();
+
+                logger.info("[{}] Received::{} '{}'", clientId, status, serverId);
+
+                Condition condition = wsJobMap.remove(serverId);
+
+                if (status.equalsIgnoreCase("Failed")) {
+                    Abort();
+                } else {
+                    if (condition != null) {
+
+                        logger.debug("Remove Job:{} - {}", serverId, wsJobMap.size());
+                        lock.lock();
+                        condition.signal();
+
+                    } else {
+                        logger.warn("Untracked Message: {}", message);
+                    }
                 }
 
-                logger.info("[x] Received '{}'", serverId);
             } catch (JAXBException | InvalidObjectException | UnsupportedEncodingException e) {
 
-                e.printStackTrace();
-                Thread.currentThread().interrupt();
+                logger.error("Error handling delivered message", e.fillInStackTrace());
+
                 Abort();
-               
+
+            } finally {
+                if (lock.isHeldByCurrentThread())
+                    lock.unlock();
             }
         }
     }

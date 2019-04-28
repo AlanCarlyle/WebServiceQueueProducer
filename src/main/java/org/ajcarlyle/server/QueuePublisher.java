@@ -56,9 +56,10 @@ public class QueuePublisher {
         try {
 
             Random random = new Random();
-            int wait = (1000 *  random.nextInt(5)); 
-            logger.info("Waiting {} Seconds before queueing message '{}'",wait/1000,message);
-            // Sleep for between 1 to 5 Seconds before sending message to queue.
+            int wait = (2000 * (1 + random.nextInt(5))); 
+            logger.debug("Waiting {} seconds",wait/1000);
+            
+            // Sleep for between 2 to 10 Seconds before sending message to queue.
             Thread.sleep(wait);
             
             channel.basicPublish("", QUEUE_NAME, null, message.getBytes());
