@@ -68,7 +68,7 @@ public class JobServiceImpl implements JobService {
     queueMessage.setServerId(serverId);
 
     int failStatus = random.nextInt(6);
-    if (failStatus == 3) {
+    if (failStatus == -100) {
       queueMessage.setStatus("Failed");
     } else {
       queueMessage.setStatus("Success");

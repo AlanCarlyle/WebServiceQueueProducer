@@ -6,6 +6,7 @@ import java.io.InvalidObjectException;
 import java.io.StringReader;
 import java.io.UnsupportedEncodingException;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.LinkedBlockingDeque;
@@ -80,63 +81,22 @@ public class Receiver {
             super(channel, maxJobsAllowed);
         }
 
-        public long jobsWaiting() {
-            return getJobMap().mappingCount();
-        }
-
-        public ReentrantLock getLock() {
-            return lock;
-        }
     }
 
     static abstract class AbortableBlockingConsumer extends DefaultConsumer {
 
-        // private BlockingQueue<String> jobQueue;
-        private ConcurrentHashMap<String, Condition> wsJobMap;
-        private boolean isAborted;
-        protected ReentrantLock lock;
+        private ConcurrentHashMap<String, CompletableFuture<JobQueueMessage>> wsJobCallbacks;
 
         public AbortableBlockingConsumer(Channel channel, int maxJobsAllowed) {
             super(channel);
-            isAborted = false;
-            wsJobMap = new ConcurrentHashMap<String, Condition>();
-            lock = new ReentrantLock(true);
+            wsJobCallbacks = new ConcurrentHashMap<String, CompletableFuture<JobQueueMessage>>();
         }
 
-        public ConcurrentHashMap<String, Condition> getJobMap() {
-            return wsJobMap;
-        }
+        public CompletableFuture<JobQueueMessage> GetCallback(String serverId) {
+            CompletableFuture<JobQueueMessage> callback = new CompletableFuture<>();
 
-        public synchronized boolean isAborted() {
-            return isAborted;
-        }
-
-        public synchronized void Abort() {
-            lock.lock();
-            logger.info("Aborting Remaining");
-            try {
-
-                isAborted = true;
-                wsJobMap.forEach((s, a) -> {
-
-                    a.signalAll();
-                });
-            } finally {
-                lock.unlock();
-            }
-        }
-
-        public Condition QueueJob(String serverId) {
-
-            lock.lock();
-            try {
-                Condition condition = lock.newCondition();
-                wsJobMap.put(serverId, condition);
-
-                return condition;
-            } finally {
-                lock.unlock();
-            }
+            wsJobCallbacks.put(serverId, callback);
+            return callback;
         }
 
         @Override
@@ -144,7 +104,6 @@ public class Receiver {
                 byte[] body) {
             try {
                 String message = new String(body, "UTF-8");
-
                 StringReader reader = new StringReader(message);
 
                 Object maybeJobQueueMessage = jaxbUnmarshaller.unmarshal(reader);
@@ -152,40 +111,30 @@ public class Receiver {
                         ? (JobQueueMessage) maybeJobQueueMessage
                         : null;
 
-                if (jobQueueMessage == null)
-                    throw new InvalidObjectException("Queue message is not valid type");
-
-                String clientId = jobQueueMessage.getClientId();
-                String serverId = jobQueueMessage.getServerId();
-                String status = jobQueueMessage.getStatus();
-
-                logger.info("[{}] Received::{} '{}'", clientId, status, serverId);
-
-                Condition condition = wsJobMap.remove(serverId);
-
-                if (status.equalsIgnoreCase("Failed")) {
-                    Abort();
+                if (jobQueueMessage == null) {
+                    logger.error("Body invalid");
+                    this.getChannel().basicReject(envelope.getDeliveryTag(), false);
                 } else {
-                    if (condition != null) {
+                    String serverId = jobQueueMessage.getServerId();
+                    CompletableFuture<JobQueueMessage> callback = wsJobCallbacks.remove(serverId);
 
-                        logger.debug("Remove Job:{} - {}", serverId, wsJobMap.size());
-                        lock.lock();
-                        condition.signal();
+                    if (callback == null) {
+                        logger.error("Callback null");
+                        this.getChannel().basicReject(envelope.getDeliveryTag(), false);
 
-                    } else {
-                        logger.warn("Untracked Message: {}", message);
+                    } else if (!callback.complete(jobQueueMessage)) {
+                        logger.error("Callback failed");
+                        this.getChannel().basicReject(envelope.getDeliveryTag(), false);                      
                     }
                 }
 
-            } catch (JAXBException | InvalidObjectException | UnsupportedEncodingException e) {
-
+            } catch (JAXBException | IOException e) {
                 logger.error("Error handling delivered message", e.fillInStackTrace());
-
-                Abort();
-
-            } finally {
-                if (lock.isHeldByCurrentThread())
-                    lock.unlock();
+                try {
+                    this.getChannel().basicReject(envelope.getDeliveryTag(), false);
+                } catch (IOException e1) {
+                    logger.error("Error dead-lettering message", e1);
+                }
             }
         }
     }

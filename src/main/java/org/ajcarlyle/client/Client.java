@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CancellationException;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -23,6 +24,7 @@ import javax.xml.namespace.QName;
 
 import org.ajcarlyle.jobservice.JobService;
 import org.ajcarlyle.jobservice.SOAPService;
+import org.ajcarlyle.jobservice.types.JobQueueMessage;
 import org.ajcarlyle.jobservice.types.JobRequest;
 import org.ajcarlyle.jobservice.types.JobResponse;
 import org.ajcarlyle.AbortedException;
@@ -58,15 +60,17 @@ public final class Client {
     }
   }
 
+  private final int maxParallelRequests = 4;
   private Receiver.JobConsumer jobConsumer;
+  private ExecutorService executor = Executors.newFixedThreadPool(maxParallelRequests);
 
   public void SendMessages() throws IOException, TimeoutException {
     int totalJobs = 20;
     int jobCount = 0;
-    int maxParallelRequests = 4;
+
 
     jobConsumer = receiver.startJobConsumer(maxParallelRequests);
-    ExecutorService executor = Executors.newFixedThreadPool(maxParallelRequests);
+
 
     List<Callable<Boolean>> jobs = new ArrayList<>();
 
@@ -74,13 +78,7 @@ public final class Client {
 
     while (jobCount < totalJobs) {
       try {
-
-        // Check if the Job Queue Consumer has been aborted while handling jobs.
-        if (jobConsumer.isAborted()) {
-          logger.error("Job Consumer is aborted");
-          throw new AbortedException("Job Queue Consumer Aborted");
-
-        }
+ 
         // Prepare the Web Service request and submit it using a Callable that returns
         // the job id.
         String message = String.format("Do Job %d", jobCount);
@@ -111,6 +109,7 @@ public final class Client {
     }
     try {
       StringBuilder sb = new StringBuilder();
+
       List<Future<Boolean>> results = executor.invokeAll(jobs);
       results.forEach(action -> {
         try {
@@ -143,26 +142,45 @@ public final class Client {
       this.request = request;
     }
 
+
+    // public Boolean conditionBlockingCall() {
+
+    //   ReentrantLock lock = jobConsumer.getLock();
+    //   lock.lock();
+    //   try {
+    //     if (jobConsumer.isAborted())
+    //       return false;
+    //     response = wsPort.executeJob(request);
+    //     String serverId = response.getServerId();
+    //     logger.debug("Web service task sent for job {} queued", serverId);
+
+    //     Condition condition = jobConsumer.QueueJob(serverId);
+    //     return condition.await(1, TimeUnit.MINUTES) && !jobConsumer.isAborted();
+
+    //   } catch (InterruptedException e) {
+    //     return false;
+    //   } finally {
+    //     lock.unlock();
+    //   }
+    // }
+
     @Override
     public Boolean call() {
 
-      ReentrantLock lock = jobConsumer.getLock();
-      lock.lock();
-      try {
-        if (jobConsumer.isAborted())
-          return false;
+      try {   
         response = wsPort.executeJob(request);
         String serverId = response.getServerId();
+        CompletableFuture<JobQueueMessage> callback = jobConsumer.GetCallback(serverId);
         logger.debug("Web service task sent for job {} queued", serverId);
 
-        Condition condition = jobConsumer.QueueJob(serverId);
-        return condition.await(1, TimeUnit.MINUTES) && !jobConsumer.isAborted();
+        JobQueueMessage message=  callback.get(1,TimeUnit.MINUTES);
+        logger.debug("Quueu Response for {} queued", serverId);
 
-      } catch (InterruptedException e) {
+        return message != null;
+
+      } catch (InterruptedException | ExecutionException | TimeoutException e) {
         return false;
-      } finally {
-        lock.unlock();
-      }
+      } 
     }
   }
 }
