@@ -23,11 +23,7 @@ public class QueuePublisher {
     private Connection connection;
     private Channel channel;
 
-    private static ExecutorService executor;
-    static {
-        int cores = Runtime.getRuntime().availableProcessors();
-        executor = Executors.newWorkStealingPool(cores);
-    }
+  
 
     public QueuePublisher() throws IOException, TimeoutException {
 
@@ -38,36 +34,28 @@ public class QueuePublisher {
         channel.queueDeclare(QUEUE_NAME, false, false, false, null);
     }
 
+    public synchronized void SendMessage(String message) throws IOException {
+        byte[] body = message.getBytes();
+        channel.basicPublish("", QUEUE_NAME, null, body);
+    }
 
-   public void SendMessage(String message) throws IOException {
+    public void Close() throws IOException, TimeoutException {
+        channel.close();
+        connection.close();
+    }
 
-    channel.basicPublish("", QUEUE_NAME, null, message.getBytes());
-   }
+    private static final Random random = new Random();
 
-   public void Close() throws IOException, TimeoutException {
-    channel.close();
-    connection.close();
-   }
+    public synchronized Runnable SendMessageAsync(String message) {
+        return () -> {
+            try {
+                byte[] body = message.getBytes();
+               
+                channel.basicPublish("", QUEUE_NAME, null, body);
 
-
-   public void SendMessageAsync(String message) {
-
-    Runnable runnable = () -> {
-        try {
-
-            Random random = new Random();
-            int wait = (2000 * (1 + random.nextInt(5))); 
-            logger.debug("Waiting {} seconds",wait/1000);
-            
-            // Sleep for between 2 to 10 Seconds before sending message to queue.
-            Thread.sleep(wait);
-            
-            channel.basicPublish("", QUEUE_NAME, null, message.getBytes());
-            logger.info(" [x] Queued {}",message);
-        } catch (IOException | InterruptedException e) {
-            logger.error("Error consuming message", e);
-        }
-    };
-    executor.submit(runnable);
-   }
+            } catch (IOException  e) {
+                logger.error("Publishing Failed", e);
+            }            
+        };
+    }
 }

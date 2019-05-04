@@ -6,6 +6,7 @@ import java.io.InvalidObjectException;
 import java.io.StringReader;
 import java.io.UnsupportedEncodingException;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.LinkedBlockingDeque;
@@ -61,8 +62,8 @@ public class Receiver {
         channel.queueDeclare(QUEUE_NAME, false, false, false, null);
     }
 
-    public JobConsumer startJobConsumer(int maxJobsAllowed) throws IOException {
-        JobConsumer consumer = new JobConsumer(channel, maxJobsAllowed);
+    public JobConsumer startJobConsumer(CancellationNotifier cancellationNotifier) throws IOException {
+        JobConsumer consumer = new JobConsumer(channel,cancellationNotifier);
         channel.basicConsume(QUEUE_NAME, true, consumer);
 
         return consumer;
@@ -74,69 +75,20 @@ public class Receiver {
         }
     }
 
-    public static class JobConsumer extends AbortableBlockingConsumer {
+    public static class JobConsumer extends CancelNotificationConsumer {
 
-        protected JobConsumer(Channel channel, int maxJobsAllowed) {
-            super(channel, maxJobsAllowed);
+        private ConcurrentHashMap<String, CompletableFuture<JobQueueMessage>> wsJobCallbacks;
+
+        protected JobConsumer(Channel channel, CancellationNotifier cancellationNotifier) {
+            super(channel,cancellationNotifier);
+            wsJobCallbacks = new ConcurrentHashMap<String, CompletableFuture<JobQueueMessage>>();
         }
 
-        public long jobsWaiting() {
-            return getJobMap().mappingCount();
-        }
+        public CompletableFuture<JobQueueMessage> GetCallback(String serverId) {
+            CompletableFuture<JobQueueMessage> callback = new CompletableFuture<>();
 
-        public ReentrantLock getLock() {
-            return lock;
-        }
-    }
-
-    static abstract class AbortableBlockingConsumer extends DefaultConsumer {
-
-        // private BlockingQueue<String> jobQueue;
-        private ConcurrentHashMap<String, Condition> wsJobMap;
-        private boolean isAborted;
-        protected ReentrantLock lock;
-
-        public AbortableBlockingConsumer(Channel channel, int maxJobsAllowed) {
-            super(channel);
-            isAborted = false;
-            wsJobMap = new ConcurrentHashMap<String, Condition>();
-            lock = new ReentrantLock(true);
-        }
-
-        public ConcurrentHashMap<String, Condition> getJobMap() {
-            return wsJobMap;
-        }
-
-        public synchronized boolean isAborted() {
-            return isAborted;
-        }
-
-        public synchronized void Abort() {
-            lock.lock();
-            logger.info("Aborting Remaining");
-            try {
-
-                isAborted = true;
-                wsJobMap.forEach((s, a) -> {
-
-                    a.signalAll();
-                });
-            } finally {
-                lock.unlock();
-            }
-        }
-
-        public Condition QueueJob(String serverId) {
-
-            lock.lock();
-            try {
-                Condition condition = lock.newCondition();
-                wsJobMap.put(serverId, condition);
-
-                return condition;
-            } finally {
-                lock.unlock();
-            }
+            wsJobCallbacks.put(serverId, callback);
+            return callback;
         }
 
         @Override
@@ -144,7 +96,6 @@ public class Receiver {
                 byte[] body) {
             try {
                 String message = new String(body, "UTF-8");
-
                 StringReader reader = new StringReader(message);
 
                 Object maybeJobQueueMessage = jaxbUnmarshaller.unmarshal(reader);
@@ -152,41 +103,44 @@ public class Receiver {
                         ? (JobQueueMessage) maybeJobQueueMessage
                         : null;
 
-                if (jobQueueMessage == null)
-                    throw new InvalidObjectException("Queue message is not valid type");
-
-                String clientId = jobQueueMessage.getClientId();
-                String serverId = jobQueueMessage.getServerId();
-                String status = jobQueueMessage.getStatus();
-
-                logger.info("[{}] Received::{} '{}'", clientId, status, serverId);
-
-                Condition condition = wsJobMap.remove(serverId);
-
-                if (status.equalsIgnoreCase("Failed")) {
-                    Abort();
+                if (jobQueueMessage == null) {
+                    logger.error("Body invalid");
+                    getCancellationNotifier().cancel();
                 } else {
-                    if (condition != null) {
+                    String serverId = jobQueueMessage.getServerId();
+                    CompletableFuture<JobQueueMessage> callback = wsJobCallbacks.remove(serverId);
 
-                        logger.debug("Remove Job:{} - {}", serverId, wsJobMap.size());
-                        lock.lock();
-                        condition.signal();
+                    if (callback == null) {
+                        logger.error("Callback null");
+                       getCancellationNotifier().cancel();
 
-                    } else {
-                        logger.warn("Untracked Message: {}", message);
+                    } else if (!callback.complete(jobQueueMessage)) {
+                        logger.error("Callback failed");
+                        getCancellationNotifier().cancel();               
                     }
                 }
 
-            } catch (JAXBException | InvalidObjectException | UnsupportedEncodingException e) {
-
+            } catch (JAXBException | IOException e) {
                 logger.error("Error handling delivered message", e.fillInStackTrace());
-
-                Abort();
-
-            } finally {
-                if (lock.isHeldByCurrentThread())
-                    lock.unlock();
+                getCancellationNotifier().cancel();
             }
         }
+    }
+
+    static abstract class CancelNotificationConsumer extends DefaultConsumer {
+
+       
+        protected CancellationNotifier cancellationNotifier;
+        public CancelNotificationConsumer(Channel channel, CancellationNotifier cancellationNotifier) {
+            super(channel);
+            this.cancellationNotifier = cancellationNotifier;
+            
+        }
+
+        public CancellationNotifier getCancellationNotifier() {
+            return cancellationNotifier;
+        }
+        
+       
     }
 }
