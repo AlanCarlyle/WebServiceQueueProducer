@@ -1,14 +1,8 @@
 package org.ajcarlyle.client;
 
-import java.time.Duration;
-import java.time.temporal.TemporalAmount;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
-
-import com.rabbitmq.client.Consumer;
 
 import org.ajcarlyle.client.Receiver.JobConsumer;
 import org.ajcarlyle.jobservice.JobService;
@@ -16,7 +10,6 @@ import org.ajcarlyle.jobservice.types.JobQueueMessage;
 import org.ajcarlyle.jobservice.types.JobRequest;
 import org.ajcarlyle.jobservice.types.JobResponse;
 import org.ajcarlyle.utilities.Strings;
-import org.slf4j.helpers.MessageFormatter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -64,7 +57,7 @@ public class JobProcessTask implements Callable<JobProcessResult> {
 
           result.setWsResponse(response);
           String serverId = response.getServerId();
-
+          String clientId = response.getClientId();
           CompletableFuture<JobQueueMessage> callback = queue.GetCallback(serverId);          
           JobQueueMessage queueMessage = callback.get(10, TimeUnit.SECONDS);
           
@@ -73,8 +66,9 @@ public class JobProcessTask implements Callable<JobProcessResult> {
             cancellationNotifier.cancel();
           } else {
             result.setQueueMessage(queueMessage);
-            logger.debug("Queue Response for {} queued", serverId);
             String status = queueMessage.getStatus();
+            logger.debug("Queue Response {} for {}-{} ", status,queueMessage.getClientId(), queueMessage.getServerId());
+            
             if (status.equals("Success")) {
               result.setCompleted(true);
             } else {

@@ -1,7 +1,5 @@
 package org.ajcarlyle.client;
 
-import com.rabbitmq.client.Consumer;
-
 import org.ajcarlyle.client.Receiver.JobConsumer;
 import org.ajcarlyle.jobservice.JobService;
 import org.ajcarlyle.jobservice.types.JobRequest;

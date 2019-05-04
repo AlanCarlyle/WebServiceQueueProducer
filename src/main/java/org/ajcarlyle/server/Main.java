@@ -1,8 +1,5 @@
 package org.ajcarlyle.server;
 
-import java.io.IOException;
-import java.util.concurrent.TimeoutException;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -15,6 +12,7 @@ public class Main {
   public static void main(String[] args) {
 
     java.lang.Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+      server.stop();
       logger.info("Server Exited");
     }));
 
@@ -22,7 +20,6 @@ public class Main {
       server = new Server();
       logger.info("Server Started");
 
-    
       server.start();
 
       //startUpTest();
@@ -31,7 +28,7 @@ public class Main {
       for (;;) {
         Thread.sleep(3000);
       }
-    } catch (InterruptedException | IOException | TimeoutException e) {
+    } catch (Throwable e) {
 
       e.printStackTrace();
       logger.error("Server exited with error", e);

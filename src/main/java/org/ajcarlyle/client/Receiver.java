@@ -1,23 +1,13 @@
 package org.ajcarlyle.client;
 
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.InvalidObjectException;
 import java.io.StringReader;
-import java.io.UnsupportedEncodingException;
-import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.LinkedBlockingDeque;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.concurrent.locks.Condition;
-import java.util.concurrent.locks.ReentrantLock;
 
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
-import javax.xml.bind.Marshaller;
 import javax.xml.bind.Unmarshaller;
 
 import com.rabbitmq.client.AMQP;
@@ -27,9 +17,7 @@ import com.rabbitmq.client.ConnectionFactory;
 import com.rabbitmq.client.DefaultConsumer;
 import com.rabbitmq.client.Envelope;
 
-import org.ajcarlyle.AbortedException;
 import org.ajcarlyle.jobservice.types.JobQueueMessage;
-import org.ajcarlyle.jobservice.types.JobResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -87,7 +75,7 @@ public class Receiver {
         public CompletableFuture<JobQueueMessage> GetCallback(String serverId) {
             CompletableFuture<JobQueueMessage> callback = new CompletableFuture<>();
 
-            wsJobCallbacks.put(serverId, callback);
+            wsJobCallbacks.putIfAbsent(serverId, callback);
             return callback;
         }
 
@@ -129,7 +117,6 @@ public class Receiver {
 
     static abstract class CancelNotificationConsumer extends DefaultConsumer {
 
-       
         protected CancellationNotifier cancellationNotifier;
         public CancelNotificationConsumer(Channel channel, CancellationNotifier cancellationNotifier) {
             super(channel);
@@ -140,7 +127,5 @@ public class Receiver {
         public CancellationNotifier getCancellationNotifier() {
             return cancellationNotifier;
         }
-        
-       
     }
 }
