@@ -1,8 +1,15 @@
 package org.ajcarlyle.server;
 
+import java.io.IOException;
 import java.io.StringWriter;
 import java.util.Random;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.FutureTask;
+import java.util.concurrent.TimeoutException;
 
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBElement;
@@ -25,7 +32,13 @@ public class JobServiceImpl implements JobService {
   private static JAXBContext jaxbContext;
   private static Marshaller jaxbMarshaller;
 
-  private Server server;
+  private QueuePublisher queue;
+
+  private static ExecutorService executor;
+  static {
+    int cores = Runtime.getRuntime().availableProcessors();
+    executor = Executors.newWorkStealingPool(cores);
+  }
 
   static {
     try {
@@ -37,8 +50,9 @@ public class JobServiceImpl implements JobService {
     }
   }
 
-  public JobServiceImpl(Server server) {
-    this.server = server;
+  public JobServiceImpl() throws IOException, TimeoutException {
+
+    this.queue = new QueuePublisher();
   }
 
   @Override
@@ -51,39 +65,54 @@ public class JobServiceImpl implements JobService {
     response.setServerId(serverId);
     try {
 
-      queueMessage(serverId, clientId);
+      logger.info("Received: {}", request.getContent());
+      logger.info("Sending: {}", serverId);
 
+      doProcessing(serverId, clientId);
+
+      logger.info("Processing Completed");
     } catch (Exception e) {
-      queueFailure(serverId, clientId, e.toString());
+      e.printStackTrace();
+
     }
     return response;
   }
 
   private final static Random random = new Random();
 
-  private void queueMessage(String serverId, String clientId) throws JAXBException {
+  private void doProcessing(String serverId, String clientId) throws Exception {
 
-    JobQueueMessage queueMessage = new JobQueueMessage();
-    queueMessage.setClientId(clientId);
-    queueMessage.setServerId(serverId);
+  
+    executor.execute(() -> {
+      try {
+        JobQueueMessage queueMessage = new JobQueueMessage();
+        queueMessage.setClientId(clientId);
+        queueMessage.setServerId(serverId);
 
-    int failStatus = random.nextInt(6);
-    if (failStatus == -100) {
-      queueMessage.setStatus("Failed");
-    } else {
-      queueMessage.setStatus("Success");
-    }
-    StringWriter writer = new StringWriter();
+        StringWriter writer = new StringWriter();
 
-    jaxbMarshaller.marshal(queueMessage, writer);
-    String content = writer.toString();
+        int failStatus = random.nextInt(7);
+        if (failStatus == 0) {
+          queueMessage.setStatus("Failed");
+        } else {
+          queueMessage.setStatus("Success");
+        }
 
-    server.getQueuePublisher().SendMessageAsync(content);
+        jaxbMarshaller.marshal(queueMessage, writer);
+        String content = writer.toString();
 
-  }
+        long wait = (1000 * (1 + random.nextInt(6))) - 800;
+        logger.debug("Waiting {} seconds", wait / (float) 1000);
 
-  private void queueFailure(String serverId, String clientId, String error) {
-    server.getQueuePublisher().SendMessageAsync(String.format("ERROR (%s-%s): %s", clientId, serverId, error));
+        Thread.sleep(wait);
+
+        queue.SendMessage(content);
+
+      } catch (Exception e) {
+        e.fillInStackTrace();
+        logger.error("Error queuing message", e);
+      }
+    });
   }
 
 }
