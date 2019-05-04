@@ -62,8 +62,8 @@ public class Receiver {
         channel.queueDeclare(QUEUE_NAME, false, false, false, null);
     }
 
-    public JobConsumer startJobConsumer(int maxJobsAllowed) throws IOException {
-        JobConsumer consumer = new JobConsumer(channel, maxJobsAllowed);
+    public JobConsumer startJobConsumer(CancellationNotifier cancellationNotifier) throws IOException {
+        JobConsumer consumer = new JobConsumer(channel,cancellationNotifier);
         channel.basicConsume(QUEUE_NAME, true, consumer);
 
         return consumer;
@@ -75,20 +75,12 @@ public class Receiver {
         }
     }
 
-    public static class JobConsumer extends AbortableBlockingConsumer {
-
-        protected JobConsumer(Channel channel, int maxJobsAllowed) {
-            super(channel, maxJobsAllowed);
-        }
-
-    }
-
-    static abstract class AbortableBlockingConsumer extends DefaultConsumer {
+    public static class JobConsumer extends CancelNotificationConsumer {
 
         private ConcurrentHashMap<String, CompletableFuture<JobQueueMessage>> wsJobCallbacks;
 
-        public AbortableBlockingConsumer(Channel channel, int maxJobsAllowed) {
-            super(channel);
+        protected JobConsumer(Channel channel, CancellationNotifier cancellationNotifier) {
+            super(channel,cancellationNotifier);
             wsJobCallbacks = new ConcurrentHashMap<String, CompletableFuture<JobQueueMessage>>();
         }
 
@@ -113,29 +105,42 @@ public class Receiver {
 
                 if (jobQueueMessage == null) {
                     logger.error("Body invalid");
-                    this.getChannel().basicReject(envelope.getDeliveryTag(), false);
+                    getCancellationNotifier().cancel();
                 } else {
                     String serverId = jobQueueMessage.getServerId();
                     CompletableFuture<JobQueueMessage> callback = wsJobCallbacks.remove(serverId);
 
                     if (callback == null) {
                         logger.error("Callback null");
-                        this.getChannel().basicReject(envelope.getDeliveryTag(), false);
+                       getCancellationNotifier().cancel();
 
                     } else if (!callback.complete(jobQueueMessage)) {
                         logger.error("Callback failed");
-                        this.getChannel().basicReject(envelope.getDeliveryTag(), false);                      
+                        getCancellationNotifier().cancel();               
                     }
                 }
 
             } catch (JAXBException | IOException e) {
                 logger.error("Error handling delivered message", e.fillInStackTrace());
-                try {
-                    this.getChannel().basicReject(envelope.getDeliveryTag(), false);
-                } catch (IOException e1) {
-                    logger.error("Error dead-lettering message", e1);
-                }
+                getCancellationNotifier().cancel();
             }
         }
+    }
+
+    static abstract class CancelNotificationConsumer extends DefaultConsumer {
+
+       
+        protected CancellationNotifier cancellationNotifier;
+        public CancelNotificationConsumer(Channel channel, CancellationNotifier cancellationNotifier) {
+            super(channel);
+            this.cancellationNotifier = cancellationNotifier;
+            
+        }
+
+        public CancellationNotifier getCancellationNotifier() {
+            return cancellationNotifier;
+        }
+        
+       
     }
 }
