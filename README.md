@@ -18,7 +18,7 @@ When we send 20 requests we process only 4 at same time waiting until have reviv
 Then if any request fails at any stage we abort sending any further requests 
 And if we take to long to get a result on the queue for a give request we abort sending any further requests 
 
+## Github practice repository
 
-
-
-
+This repository is also, for me, a practise one for using Github.  
+As result there will be atypical activity that is purely for the purpose of exploring Github usage.
