@@ -9,7 +9,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 @javax.jws.WebService(portName = "SoapPort", serviceName = "SOAPService", targetNamespace = "http://ajcarlyle.org/jobservice", endpointInterface = "org.ajcarlyle.jobservice.JobService")
-
 public class JobServiceImpl implements JobService {
 
   private final static Logger logger = LoggerFactory.getLogger(JobServiceImpl.class);
@@ -35,14 +34,11 @@ public class JobServiceImpl implements JobService {
 
       server.doProcessing(serverId, clientId);
 
-      logger.info("Processing Completed");
+      logger.info("Web Service response sent {}-{}",clientId, serverId);
+      
     } catch (Exception e) {
       e.printStackTrace();
-
     }
     return response;
   }
-
-  
-
 }

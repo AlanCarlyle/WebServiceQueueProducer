@@ -38,10 +38,11 @@ public class JobProcessTask implements Callable<JobProcessResult> {
 
   @Override
   public JobProcessResult call() {
-    JobProcessResult result = new JobProcessResult(request);
-    try {
 
-      result.setCompleted(false);
+    // Prepare result with request and set to not completed
+    JobProcessResult result = new JobProcessResult(request);
+    result.setCompleted(false);
+    try {
 
       if (cancellationNotifier.isCanceled()) {
         result.setFailureMessage("Canceled");
@@ -57,15 +58,16 @@ public class JobProcessTask implements Callable<JobProcessResult> {
 
           result.setWsResponse(response);
           String serverId = response.getServerId();
-          String clientId = response.getClientId();
+
           CompletableFuture<JobQueueMessage> callback = queue.GetCallback(serverId);          
           JobQueueMessage queueMessage = callback.get(10, TimeUnit.SECONDS);
+          result.setQueueMessage(queueMessage);
           
           if (queueMessage == null) {
             result.setFailureMessage("Queue Message is null");
             cancellationNotifier.cancel();
           } else {
-            result.setQueueMessage(queueMessage);
+          
             String status = queueMessage.getStatus();
             logger.debug("Queue Response {} for {}-{} ", status,queueMessage.getClientId(), queueMessage.getServerId());
             

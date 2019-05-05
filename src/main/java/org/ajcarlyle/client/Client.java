@@ -18,7 +18,7 @@ public class Client {
 
     List<String> messages = new ArrayList<>();
 
-    for(int i=0;i<=20;i++) {
+    for(int i=1;i<=50;i++) {
       messages.add(Strings.format("Working Job {}", i));
     }
 

@@ -12,7 +12,12 @@ public class Main {
   public static void main(String[] args) {
 
     java.lang.Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-      server.stop();
+      try {
+        server.stop();
+      } catch (InterruptedException e) {
+        // TODO Auto-generated catch block
+        e.printStackTrace();
+      }
       logger.info("Server Exited");
     }));
 
