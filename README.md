@@ -8,8 +8,8 @@ This is primarily an exploration of a moderatly complex threading scenario for t
 
 The general scenario is;
 
-Each web service requests are sent using individual async task 
-There is a singleton Rabbit MQ consumer that receives all results 
+Each web service request is set using an individual async task.  
+There is a single Rabbit MQ consumer that receives all results.
 
 Given many request to be sent to  web service   
 And immediate reply from web service with job identifier   
