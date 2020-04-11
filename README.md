@@ -11,12 +11,14 @@ The general scenario is;
 Each web service request is set using an individual async task.  
 There is a single Rabbit MQ consumer that receives all results.
 
-Given many request to be sent to  web service   
+Given many requests to be sent to  web service   
 And immediate reply from web service with job identifier   
 And long wait for job processing result to be placed on message queue   
 When we send 20 requests we process only 4 at same time waiting until have revived result before starting next one 
 Then if any request fails at any stage we abort sending any further requests 
-And if we take to long to get a result on the queue for a give request we abort sending any further requests 
+And if we take to long to get a result on the queue for a given request we abort sending any further requests 
+
+Models processing in situation where the number of jobs is much larger and duration of processing can extend to a few hours. The web service requests can come from many unmanaged clients in quantities large enough to clog up the processing pipe-line.
 
 ## Github practice repository
 
